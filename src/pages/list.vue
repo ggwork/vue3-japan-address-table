@@ -112,28 +112,159 @@ function tableSelectionChange(sectionData){
 
 
 
-function createExcel2(){
+
+
+function getProductData(){
+
+  let proList  = [
+    ['番号','商品名','','','','','','数量','単価（元）','小計（元）','備考'],
+    ['1','ヒューラック400','','','','','','1','75','75',''],
+    ['2','パブロンゴールド”','','','','','','1','45','45',''],
+    ['3','パブロンキッズカゼ','','','','','','1','65','65',''],
+    ['4','Diana　婦人靴','','','','','','1','685','685',''],
+    ['5','三宅一生　ボトムC','','','','','','1','950','950',''],
+    ['6','三宅一生　ボトムM','','','','','','1','1180','1180',''],
+    ['7','リングフィットアドベンチャー','','','','','','1','430','430',''],
+  ]
+  let totalMoneyChina =  proList.reduce((total,curItem)=>{
+    return total + Number(curItem[9])
+  },0) 
+  // 添加3个空行
+  let emptyRow = ['','','','','','']
+  proList.push(emptyRow)
+  proList.push(emptyRow)
+  proList.push(emptyRow)
+  // 合计金额和汇率
+  proList.push(['合計金額（元）','','','','','','','','','3430'],)
+  proList.push(['為替レート','','','','','','','','','17.11'],)
+  proList.push(['合計金額（円）','','','','','','','','',''],)
+
+  return proList
+}
+
+
+function createPersonExcel(){
+  let customer = {
+    id:'pursue. 追逐 b',
+    name:'章巍娜'
+  }
+
   const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('sheet',{
-    headerFooter:{firstHeader: "Hello Exceljs", firstFooter: "Hello World"}
+  workbook.created = new Date()
+  const worksheet = workbook.addWorksheet('sheet1');
+
+  // 通过 base64  将图像添加到工作簿
+  const myBase64Image = logoImg;
+  const imageId2 = workbook.addImage({
+    base64: myBase64Image,
+    extension: 'png',
   });
+  worksheet.addImage(imageId2, {
+    tl: { col: 0.2, row: 1 },
+    editAs:'absolute',
+    ext: { width: 120, height: 60 }
+  });
+  
+  
+  
 
-  worksheet.columns = [
-    { header: 'id', key: 'id', width: 10 },
-    { header: 'name', key: 'name', width: 32 },
-    { header: 'dob', key: 'dob', width: 10, outlineLevel: 1 }
-  ];
 
-  // Access an individual columns by key, letter and 1-based column number
-  const idCol = worksheet.getColumn('id');
-  const nameCol = worksheet.getColumn('B');
-  const dobCol = worksheet.getColumn(3);
+  // 单元格标题 
+  worksheet.mergeCells('D3:J4');
+  worksheet.getCell('D3').value = '株式会社　清沐雪　売上伝票';
+  worksheet.getCell('D3').font = {
+    bold:true,
+    size:16,
+  }
+  worksheet.getCell('D3').alignment = { vertical: 'middle', horizontal: 'center' };
+  // 标题样式设置完成
 
-  worksheet.addRow({id: 1, name: 'John Doe', dob: new Date(1970,1,1)});
-  worksheet.addRow({id: 2, name: 'John Doe2', dob: new Date(1970,1,1)});
-  // let url = sheet2blobUrl(worksheet)
-  // let downloadFileName = '商品2'+'.xlsx'
-  // downFile(url, downloadFileName)
+  // 设置发送番号
+  worksheet.getCell('I5').value = 'ラベル番号：';
+
+  // 设置顾客信息
+  worksheet.mergeCells('A6:B6');
+  worksheet.mergeCells('C6:D6');
+  worksheet.getCell('A6').value = '顧客ID：';
+  // 顾客id
+  worksheet.getCell('C6').value = customer.id;
+  worksheet.getCell('E6').value = '顧客名：';
+  worksheet.getCell('F6').value = customer.name;
+  worksheet.getCell('K6').value = '発送日：';
+
+  // 添加商品
+  let proList = getProductData()
+  // 合并商品表格单元格
+  // 从第7行开始以下为商品数据
+  let  startRowNum = 7
+  let columnLabelList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
+  for(let i=0;i<proList.length -3;i++){
+    let targetRowNum = startRowNum + i
+    
+    worksheet.insertRow(targetRowNum,proList[i])
+    columnLabelList.forEach(label=>{
+      let tCell = worksheet.getCell(`${label}${targetRowNum}`)
+      tCell.font = { size:11}
+      tCell.border = {
+        top: {style:'thin', color: {argb:'00000000'}},
+        left: {style:'thin', color: {argb:'00000000'}},
+        bottom: {style:'thin', color: {argb:'00000000'}},
+        right: {style:'thin', color: {argb:'00000000'}}
+      }
+    })
+    worksheet.mergeCells(`B${targetRowNum}:G${targetRowNum}`)
+    worksheet.mergeCells(`K${targetRowNum}:L${targetRowNum}`)
+    // worksheet.addRow(['番号','商品名','','','','','','数量','単価（元）','小計（元）','備考'])
+    
+    
+  }
+  for(let j= proList.length -3;j<proList.length;j++){
+    let targetRowNum = startRowNum + j
+    
+    worksheet.insertRow(targetRowNum,proList[j])
+    columnLabelList.forEach(label=>{
+      let tCell = worksheet.getCell(`${label}${targetRowNum}`)
+      tCell.font = { size:11}
+      tCell.alignment = { vertical: 'middle', horizontal: 'right' }
+      tCell.border = {
+        top: {style:'thin', color: {argb:'00000000'}},
+        left: {style:'thin', color: {argb:'00000000'}},
+        bottom: {style:'thin', color: {argb:'00000000'}},
+        right: {style:'thin', color: {argb:'00000000'}}
+      }
+    })
+    worksheet.mergeCells(`A${targetRowNum}:I${targetRowNum}`)
+    worksheet.mergeCells(`J${targetRowNum}:L${targetRowNum}`)
+
+    
+
+    
+  }
+  // 合计金额日元部分 插入公式
+
+  worksheet.getCell(`J${startRowNum+proList.length -1 }`).value = { formula: `J${startRowNum+proList.length-2}*J${startRowNum+proList.length -3}`, result: 0 };
+
+  // 代金首领日 先插入一个空行
+  worksheet.addRow()
+
+  let getRowNum = startRowNum+proList.length + 1
+  worksheet.addRow(['代金受領日：','','','2022/6/28  0:00:00'])
+  worksheet.mergeCells(`A${getRowNum}:C${getRowNum}`)
+
+  worksheet.addRow()
+  worksheet.addRow(['郵送先：','',' 上海市松江区乐都路675弄玉树南苑195号601室 13641922396 '])
+  worksheet.mergeCells(`A${getRowNum + 2}:B${getRowNum +2}`)
+
+  // worksheet.addRow(proList)
+  
+
+  
+
+
+
+  
+
+ 
 
   workbook.xlsx.writeBuffer().then(buffer => {
       // done
@@ -146,8 +277,12 @@ function createExcel2(){
 }
 
 function  createExcel(){
+  
+  
 
-  createExcel2()
+  
+
+  createPersonExcel()
 
   return
   

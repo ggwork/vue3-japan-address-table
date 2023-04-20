@@ -24,7 +24,7 @@ let activeIndex = ref('/')
 
 function initMenuActiveIndex(route){
   let routeName = route.name
-  console.log('routeName:',routeName)
+  // console.log('routeName:',routeName)
   activeIndex.value = routeName ? routeName.toLowerCase() : 'index'
 
 }
