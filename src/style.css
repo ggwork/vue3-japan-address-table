@@ -94,3 +94,41 @@ button:focus-visible {
   margin-top: 20px;
   padding: 20px;
 }
+
+.el-dialog__headerbtn:focus {
+  outline: none;
+}
+
+.mt10 {
+  margin-top: 10px;
+}
+.mt20 {
+  margin-top: 20px;
+}
+.ml10 {
+  margin-left: 10px;
+}
+.ml20 {
+  margin-left: 20px;
+}
+.mb10 {
+  margin-bottom: 10px;
+}
+.mb20 {
+  margin-bottom: 20px;
+}
+.mr10 {
+  margin-right: 10px;
+}
+.mr20 {
+  margin-right: 20px;
+}
+.red {
+  color: #f56c6c;
+}
+.green {
+  color: #67c23a;
+}
+.bold {
+  font-weight: bold;
+}

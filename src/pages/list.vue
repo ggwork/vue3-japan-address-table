@@ -3,7 +3,7 @@
     <div class="tools">
       <div class="t-left">
         <el-button type="primary" @click="goForm">新增数据</el-button>
-        <el-button  @click="createExcel">下载数据</el-button>
+        <el-button  @click="createPersonExcel">下载数据</el-button>
       </div>
       <div class="t-right">
         <el-date-picker
@@ -36,7 +36,6 @@
   </div>
 </template>
 <script setup>
-import * as XLSX from 'xlsx/xlsx.mjs'
 import  {ref} from 'vue'
 import { ElMessage } from 'element-plus'
 import { saveAs } from "file-saver";
@@ -256,108 +255,13 @@ function createPersonExcel(){
   worksheet.mergeCells(`A${getRowNum + 2}:B${getRowNum +2}`)
 
   // worksheet.addRow(proList)
-  
-
-  
-
-
-
-  
-
- 
-
   workbook.xlsx.writeBuffer().then(buffer => {
       // done
       saveAs(new Blob([buffer]), `${Date.now()}_feedback.xlsx`);
   });
-
-  
-
-
 }
 
-function  createExcel(){
-  
-  
 
-  
-
-  createPersonExcel()
-
-  return
-  
-
-  // if(!selectionData.value || selectionData.value.length === 0){
-  //   ElMessage({
-  //     type:'error',
-  //     message:'请至少选择一项数据，才能下载'
-  //   })
-  //   return
-  // }
-  let xNameData = ['番号','商品名','数量','単価（元）','小計（元）','備考']
-  let xlsxData = [
-    [
-      '1','ヒューラック400','1','75','75',''
-    ]
-  ]
-  xlsxData.unshift(xNameData)
-  let worksheet = XLSX.utils.aoa_to_sheet(xlsxData,{origin:'A6'})
-
-  // 合并单元格
-  worksheet['!merges'] = [
-    {
-      s: { c: 3, r: 2 },
-      e: { c: 9, r: 3 }
-    }
-  ]
-
-  XLSX.utils.sheet_add_aoa(worksheet, [['株式会社　清沐雪　売上伝票']], { origin: {c:3,r:2} });
-
-
-
-
-  let url = sheet2blobUrl(worksheet)
-  let downloadFileName = '商品'+'.xlsx'
-  downFile(url, downloadFileName)
-}
-
-function sheet2blobUrl(sheet, sheetName) {
-  sheetName = sheetName || 'sheet'
-  var workbook = {
-    SheetNames: [sheetName],
-    Sheets: {}
-  }
-  workbook.Sheets[sheetName] = sheet
-  // 生成excel的配置项
-  var wopts = {
-    bookType: 'xlsx', // 要生成的文件类型
-    bookSST: false, // 是否生成Shared String Table，官方解释是，如果开启生成速度会下降，但在低版本IOS设备上有更好的兼容性
-    type: 'binary'
-  }
-  var wbout = XLSX.write(workbook, wopts)
-  var blob = new Blob([s2ab(wbout)], { type: 'application/octet-stream' })
-  // 字符串转ArrayBuffer
-  function s2ab(s) {
-    var buf = new ArrayBuffer(s.length)
-    var view = new Uint8Array(buf)
-    for (var i = 0; i != s.length; ++i) view[i] = s.charCodeAt(i) & 0xff
-    return buf
-  }
-  let url = URL.createObjectURL(blob)
-  return url
-}
-function downFile(url, fileName) {
-  const el = document.createElement('a')
-  el.style.display = 'none'
-  el.setAttribute('target', '_blank')
-
-  el.href = url
-  el.download = fileName
-  document.body.appendChild(el)
-  el.click()
-
-  document.body.removeChild(el)
-}
 
 </script>
 <style lang="scss" scoped>

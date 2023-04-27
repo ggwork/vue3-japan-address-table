@@ -3,9 +3,17 @@ import * as VueRouter from 'vue-router'
 
 
 const routes = [
+
   {
     path: '/',
     redirect: '/list'
+  },
+  {
+    path: '/product',
+    component: () => {
+      return import("../pages/product.vue")
+    },
+    name: 'Product'
   },
   // {
   //   path: '/index',
