@@ -5,9 +5,9 @@
       <div class="t-left">
         
         <el-button type="primary" @click="goForm">新增小票</el-button>
-        <el-button class="ml10" type="primary" @click="createOrder">生成订单</el-button>
-        <el-button type="primary" @click="startImportExcel">导入小票excel</el-button>
         
+        <el-button type="primary" @click="startImportExcel">导入小票excel</el-button>
+        <el-button class="ml10" type="primary" @click="createOrder">生成订单</el-button>
       </div>
       <div class="t-right">
         <el-date-picker
@@ -31,21 +31,38 @@
       <el-table :data="tableData" style="width: 100%" border highlight-current-row  @selection-change="tableSelectionChange">
         <el-table-column type="selection" width="55" @selectable="checkRowSelectStatus"/>
         <el-table-column prop="date" label="日期"  />
-        <el-table-column prop="product" label="商品" width="300"/>
+        <el-table-column prop="productName" label="商品" width="300"/>
         <el-table-column prop="num" label="数量" />
         <el-table-column prop="price" label="单价" />
-        <el-table-column label="总价">
-          <template #default="scope">
-            {{ scope.row.num * scope.row.price }}
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" show-overflow-tooltip>
+        <el-table-column prop="totalPrice" label="总价" />
+    
+        <el-table-column label="状态"
+        :filters="[
+          { text: '未使用', value: '0' },
+          { text: '已使用', value: '1' },
+        ]"
+        :filter-method="filterStatus"
+        >
           <template #default="scope">
             <span :class="[scope.row.status ? 'red':'green']">
-              {{ statusMap[scope.row.status] }}
+              {{ statusMap[scope.row.status] || '未使用' }}
             </span>
           </template>
         </el-table-column>
+        <el-table-column label="操作">
+          <template #default="scope">
+            <el-button size="small" @click="editRow(scope.$index, scope.row)"
+              >编辑</el-button
+            >
+            <el-button
+              size="small"
+              type="danger"
+              @click="deleteRow(scope.$index, scope.row)"
+              >删除</el-button
+            >
+          </template>
+        </el-table-column>
+        
       </el-table>
     </div>
 
@@ -54,6 +71,7 @@
       title="导入小票excel"
       width="30%"
       :before-close="uploadFileDialogClose"
+      :close-on-click-modal = "false"
     >
       <div class="tip mb20 red bold">导入的小票excel应于与模板一致：<a href="https://gg-common.oss-cn-beijing.aliyuncs.com/doc/%E5%B0%8F%E7%A5%A8%E6%A8%A1%E6%9D%BF.xlsx" target="_blank">小票模板</a></div>
       
@@ -73,6 +91,41 @@
         </el-button>
       </el-upload>
     </el-dialog>
+    <el-dialog
+      v-model="newDialogVisible"
+      title="新增小票"
+      :close-on-click-modal = "false"
+    >
+    <el-form ref="proFormRef" :model="newProForm" label-width="120px" class="pro-form" :rules="newPFormRules">
+      <el-form-item label="日期" prop="date">
+        <el-date-picker
+        v-model="newProForm.date"
+        type="date"
+        placeholder="请选择日期"
+        :default-value="proFormDefaultDate"
+        value-format="YYYY-MM-DD"
+        format="YYYY-MM-DD"
+        
+      />
+      </el-form-item>
+      <el-form-item label="商品名" prop="productName">
+        <el-input v-model="newProForm.productName" />
+      </el-form-item>
+      <el-form-item label="购买数量" prop="num">
+        <el-input v-model.number="newProForm.num" />
+      </el-form-item>
+      <el-form-item label="购买单价" prop="price">
+        <el-input v-model.number="newProForm.price" />
+      </el-form-item>
+      <el-form-item label="总价">
+        {{ newProForm.num * newProForm.price ?  newProForm.num * newProForm.price : 0}}
+      </el-form-item>
+      <el-form-item>
+        <el-button type="primary" @click="submitProForm(proFormRef)">提交</el-button>
+        <el-button @click="resetProForm(proFormRef)">重置</el-button>
+      </el-form-item>
+    </el-form>
+    </el-dialog>
   </div>
 </template>
 <script setup>
@@ -80,7 +133,7 @@ import * as XLSX from 'xlsx/xlsx.mjs'
 import  { ref } from 'vue'
 import { ElMessage,genFileId } from 'element-plus'
 import ExcelJS from 'exceljs'
-
+import dayjs from 'dayjs'
 
 let curMonth = ref('2')
 // 查询月份
@@ -123,15 +176,10 @@ function checkRowSelectStatus(row){
 let tableData = ref([
   {
     date:'2023-04-26',
-    product:'GIアリズﾑコットンブレンﾄﾞセット',
+    productName:'GIアリズﾑコットンブレンﾄﾞセット',
     num:2,
-    price:790
-  },
-  {
-    date:'2023-04-26',
-    product:'Jounal Standard フラックロングベスト',
-    num:1,
-    price:10560
+    price:790,
+    totalPrice:790
   }
 ])
 
@@ -148,14 +196,75 @@ let hasUploadToServer = ref(false)
 
 let upLoading = ref(false)
 
-// Excel结果数组，因为本项目中不同的sheet数据格式一样，因此不同的sheet数据可以合并到一起处理
-let excelListResult = []
+// 新增小票
+let newDialogVisible = ref(false)
+
+// 新增小票表单
+
+let newProForm = ref({
+  date:'',
+  productName:'',
+  num:'',
+  price:''
+})
+let newPFormRules = {
+  date: [{ required: true, message: '日期不能为空', trigger: 'blur' }],
+  productName: [
+    { required: true, message: '商品名不能为空', trigger: 'blur' }
+  ],
+  num: [
+    { required: true, message: '数量不能为空' },  
+    { type: 'number', message: '数量必须是数字' }
+  ],
+  price:[
+    { required: true, message: '价格不能为空' },  
+    { type: 'number', message: '价格必须是数字' }
+  ],
+}
+let localFormDefaultDate = localStorage.getItem('localFormDefaultDate') 
+console.log('localFormDefaultDate:',localFormDefaultDate);
+let defaultDate = localFormDefaultDate && localFormDefaultDate!=='undefined' ? new Date(localFormDefaultDate) : new Date()
+let proFormDefaultDate = ref(defaultDate)
+
+let proFormRef = ref()
+
+function goForm() {
+  newDialogVisible.value = true
+}
+
+
+function submitProForm(formEl){
+  if (!formEl) return
+  formEl.validate((valid) => {
+    if (valid) {
+      console.log('form')
+      localStorage.setItem('localFormDefaultDate',newProForm.value.date)
+      newDialogVisible.value = false
+      resetProForm()
+
+    } else {
+      
+      return false
+    }
+  })
+}
+
+function  resetProForm(formEl) {
+  if (!formEl) return
+  formEl.clearValidate()
+  formEl.resetFields()
+}
+
+
+
+
 
 function tableSelectionChange(sectionData){
   tableSelectionData.value = sectionData
 }
 
 function startImportExcel(){
+  uploadFileRef.value?.clearFiles()
   uploadFileDialogVisible.value = true
   hasUploadToServer.value = true
 }
@@ -184,24 +293,42 @@ function uploadFileDialogClose(done){
   
 }
 
+// 根据cell的类型获取cell的值
+/**
+ * 
+ *  
+ */
+function getCellValue(cell) {
+  if(cell.type ===ExcelJS.ValueType.Null){
+    return ''
+  }else if (cell.type === ExcelJS.ValueType.Number || cell.type === ExcelJS.ValueType.String || cell.type === ExcelJS.ValueType.Boolean){
+    return cell.value
+  }else if (cell.type === ExcelJS.ValueType.Date){
+    return dayjs(cell.value).format('YYYY-MM-DD')
+  }else if (cell.type === ExcelJS.ValueType.Hyperlink){
+    return  cell.value.text
+  }else if (cell.type === ExcelJS.ValueType.Formula || cell.type === ExcelJS.ValueType.SharedString){
+    return  cell.value.result
+  }else if (cell.type === ExcelJS.ValueType.Error){
+    return cell.value.error
+  }else if(cell.type === ExcelJS.ValueType.RichText){
+    return  cell.text
+  }
+}
+
 async function excelToJson(fileBuffer){
   const excelResult = {};
- 
   const workbook = new ExcelJS.Workbook();
-
   await workbook.xlsx.load(fileBuffer);
   // 取第一个数据的第一行进行数据验证，验证通过了再转json。
   let firstSheet = workbook.worksheets[0]
-  window.firstSheet = firstSheet
-  console.log('firstSheet:',firstSheet)
-  let firstRowValues = firstSheet.getRow(0)
-  console.log('firstRowValues:',firstRowValues)
-  if(!firstRowValues){
-    ElMessage.error('Excel数据不能为空')
+  
+  // 获取第一个单元格数据
+  let firstCellValue = getCellValue(firstSheet.getCell('A1')) ;
+  if(!/^[1-2][0-9][0-9][0-9]-[0-1]{0,1}[0-9]-[0-3]{0,1}[0-9]$/.test(firstCellValue)){
+    ElMessage.error('表格第一列应为日期，且格式为YYYY-MM-DD')
     return 
   }
-  let excelDate = firstRowValues[0]
-  return 
   
   workbook.eachSheet((worksheet,sheetId)=>{
     let sheetResult = []
@@ -227,7 +354,7 @@ async function excelToJson(fileBuffer){
       //   sheetResult.push(obj)
       // }
       row.eachCell((cell, colNumber)=>{
-        obj[keys[colNumber-1]] = cell.value
+        obj[keys[colNumber-1]] = getCellValue(cell)
       });
       sheetResult.push(obj)
     });
@@ -240,11 +367,13 @@ async function excelToJson(fileBuffer){
 } 
 // 将不同的sheet数据合并到一个数据中处理
 function mergeJsonToArray(jsonData) {
+  console.log('jsonData:',jsonData)
   let excelListResult = []
-  let keys = Object.key(jsonData)
-  keys.each(key=>{
+  let keys = Object.keys(jsonData)
+  keys.forEach(key=>{
     excelListResult = excelListResult.concat(jsonData[key])
   })
+  return excelListResult
 }
 
 // 导入excel
@@ -256,12 +385,12 @@ function importExcel(uploadFile,uploadFiles){
   reader.onload = async ()=> {
     let excelResult = await excelToJson(reader.result)
     if(excelResult){
-      let excelListResult = mergeJsonToArray(excelResult)
-      console.log('reader.excelResult:',excelResult);
+      let excelArrayResult = mergeJsonToArray(excelResult)
+      
+      tableData.value = excelArrayResult
     }else {
       console.log('excelToJson excelResult:',excelResult)
     }
-    
   }
   reader.readAsArrayBuffer(uploadFile.raw);
   upLoading.value = false
@@ -273,9 +402,24 @@ function uploadFileExceed(files){
   file.uid = genFileId()
   uploadFileRef.value.handleStart(file)
 }
+
+
 // 生成订单
 function createOrder(){
   console.log('生成订单')
+}
+
+function filterStatus(value,row,column){
+  const property = column['property']
+  return row[property] === value
+}
+
+function editRow(index,row){
+   
+}
+
+function deleteRow(index,row){
+
 }
 
 
@@ -321,5 +465,8 @@ function createOrder(){
 }
 .table-wrap{
   margin-top: 20px;
+}
+.pro-form{
+  width:400px
 }
 </style>

@@ -1,16 +1,20 @@
 
 
 <template>
-  <div class="container">
-    <mHeader></mHeader>
-    <div class="mbody">
-      <router-view></router-view>
+  <el-config-provider :locale="locale">
+    <div class="container">
+      <mHeader></mHeader>
+      <div class="mbody">
+        <router-view></router-view>
+      </div>
     </div>
-  </div>
+  </el-config-provider>
 </template>
 
 <script setup>
 import mHeader from './components/mHeader.vue';
+import { ElConfigProvider } from 'element-plus'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 
 
 
