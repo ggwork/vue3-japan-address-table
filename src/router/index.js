@@ -6,7 +6,7 @@ const routes = [
 
   {
     path: '/',
-    redirect: '/list'
+    redirect: '/product'
   },
   {
     path: '/product',

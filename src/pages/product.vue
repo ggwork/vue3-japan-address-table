@@ -3,9 +3,7 @@
     <div class="title">{{curMonth}}月小票信息如下</div>
     <div class="tools">
       <div class="t-left">
-        
         <el-button type="primary" @click="goForm">新增小票</el-button>
-        
         <el-button type="primary" @click="startImportExcel">导入小票excel</el-button>
         <el-button class="ml10" type="primary" @click="createOrder">生成订单</el-button>
       </div>
@@ -35,7 +33,6 @@
         <el-table-column prop="num" label="数量" />
         <el-table-column prop="price" label="单价" />
         <el-table-column prop="totalPrice" label="总价" />
-    
         <el-table-column label="状态"
         :filters="[
           { text: '未使用', value: '0' },
@@ -49,7 +46,7 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="操作">
+        <el-table-column label="操作" width="150">
           <template #default="scope">
             <el-button size="small" @click="editRow(scope.$index, scope.row)"
               >编辑</el-button
@@ -111,15 +108,40 @@
       <el-form-item label="商品名" prop="productName">
         <el-input v-model="newProForm.productName" />
       </el-form-item>
+      <el-form-item label="商品地区" prop="address">
+        <el-select v-model="newProForm.address"  placeholder="请选择地区">
+          <el-option
+            v-for="item in addressOptions"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="使用状态" prop="status" v-if="editType === 'edit'" :rules="{
+        required: true,
+        message: '使用状态不能为空',
+        trigger: 'blur',
+      }">
+        <el-select v-model="newProForm.status"  placeholder="请选择状态">
+          <el-option
+            v-for="item in statusOptions"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
+        </el-select>
+      </el-form-item>
       <el-form-item label="购买数量" prop="num">
-        <el-input v-model.number="newProForm.num" />
+        <el-input v-model="newProForm.num" :parser="value => Number(value)"/>
       </el-form-item>
       <el-form-item label="购买单价" prop="price">
-        <el-input v-model.number="newProForm.price" />
+        <el-input v-model="newProForm.price" :parser="value => Number(value)"/>
       </el-form-item>
       <el-form-item label="总价">
         {{ newProForm.num * newProForm.price ?  newProForm.num * newProForm.price : 0}}
       </el-form-item>
+      
       <el-form-item>
         <el-button type="primary" @click="submitProForm(proFormRef)">提交</el-button>
         <el-button @click="resetProForm(proFormRef)">重置</el-button>
@@ -129,11 +151,16 @@
   </div>
 </template>
 <script setup>
-import * as XLSX from 'xlsx/xlsx.mjs'
-import  { ref } from 'vue'
+
+import  { ref,onMounted } from 'vue'
 import { ElMessage,genFileId } from 'element-plus'
 import ExcelJS from 'exceljs'
 import dayjs from 'dayjs'
+import { addProduct,getProductApi } from '@/api/product'
+
+let localFormDefaultDate = localStorage.getItem('localFormDefaultDate') 
+
+let proFormDefaultDate = ref(localFormDefaultDate)
 
 let curMonth = ref('2')
 // 查询月份
@@ -160,6 +187,20 @@ function searchData(){
   console.log(searchDate.value)
   console.log(searchAddress.value)
 }
+
+
+
+let statusOptions = [
+  {
+    value:0,
+    label:'未使用'
+  },
+  {
+    value:1,
+    label:'已使用'
+  }
+]
+
 
 let statusMap = {
   0:'未使用',
@@ -199,11 +240,22 @@ let upLoading = ref(false)
 // 新增小票
 let newDialogVisible = ref(false)
 
+let editType = ref('edit')
+
 // 新增小票表单
 
+function validateNumber(rulr,value,callback){
+  if(/^\d+(\.\d+)?$/.test(value)){
+    callback()
+  }else {
+    callback(new Error('输入必须是数字'))
+  }
+}
 let newProForm = ref({
-  date:'',
+  date:localFormDefaultDate,
   productName:'',
+  address:'',
+  status:0,
   num:'',
   price:''
 })
@@ -212,34 +264,73 @@ let newPFormRules = {
   productName: [
     { required: true, message: '商品名不能为空', trigger: 'blur' }
   ],
+  address: [
+    { required: true, message: '地区不能为空', trigger: 'blur' }
+  ],
+  status: [
+    { required: true, message: '商品使用状态不能为空', trigger: 'blur' }
+  ],
   num: [
     { required: true, message: '数量不能为空' },  
-    { type: 'number', message: '数量必须是数字' }
+    { validator: validateNumber, trigger: 'blur' }
   ],
   price:[
     { required: true, message: '价格不能为空' },  
-    { type: 'number', message: '价格必须是数字' }
+    { validator: validateNumber, trigger: 'blur' }
   ],
 }
-let localFormDefaultDate = localStorage.getItem('localFormDefaultDate') 
-console.log('localFormDefaultDate:',localFormDefaultDate);
-let defaultDate = localFormDefaultDate && localFormDefaultDate!=='undefined' ? new Date(localFormDefaultDate) : new Date()
-let proFormDefaultDate = ref(defaultDate)
+
+// console.log('localFormDefaultDate:',localFormDefaultDate);
+// let defaultDate = localFormDefaultDate && localFormDefaultDate!=='undefined' ? new Date(localFormDefaultDate) : new Date()
+
+
+
 
 let proFormRef = ref()
 
+function resetNewProForm(){
+  newProForm.value = {
+    date:localFormDefaultDate,
+    productName:'',
+    address:'',
+    status:0,
+    num:'',
+    price:''
+  }
+}
+
 function goForm() {
+  editType.value = 'new'
   newDialogVisible.value = true
+  resetNewProForm()
 }
 
 
+async function getProductList(){
+  let res = await getProductApi({
+    startDate:searchDate.value[0],
+    endDate:searchDate.value[1],
+    searchAddress:searchAddress.value
+  })
+  console.log('getProductList res:',res)
+  if(res){
+    tableData.value = res
+  }
+}
+
 function submitProForm(formEl){
   if (!formEl) return
-  formEl.validate((valid) => {
+  formEl.validate(async (valid) => {
     if (valid) {
       console.log('form')
       localStorage.setItem('localFormDefaultDate',newProForm.value.date)
       newDialogVisible.value = false
+      await addProduct(newProForm.value)
+      ElMessage.success('新增成功')
+
+      getProductList()
+
+      
       resetProForm()
 
     } else {
@@ -415,13 +506,21 @@ function filterStatus(value,row,column){
 }
 
 function editRow(index,row){
-   
+  console.log('row:',row)
+  editType.value = 'edit'
+  newDialogVisible.value = true
+  newProForm.value = row
+  
 }
 
 function deleteRow(index,row){
 
 }
 
+
+onMounted(()=>{
+  getProductList()
+})
 
 
 

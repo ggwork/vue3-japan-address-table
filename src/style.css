@@ -132,3 +132,19 @@ button:focus-visible {
 .bold {
   font-weight: bold;
 }
+.el-date-picker {
+  width: 100%;
+}
+
+.el-date-editor.el-input {
+  width: 100% !important;
+}
+
+.el-input__wrapper {
+  width: 100% !important;
+  box-sizing: border-box;
+}
+
+.el-select {
+  width: 100% !important;
+}

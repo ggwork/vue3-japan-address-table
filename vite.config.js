@@ -41,6 +41,8 @@ export default ({ mode }) => defineConfig({
     port: getEnvFn(mode, "VITE_PORT")
   },
   resolve: {
-    alias: pathResolve("src")
+    alias: {
+      "@": resolve(__dirname, "./src"),
+    }
   }
 })
