@@ -136,15 +136,15 @@ button:focus-visible {
   width: 100%;
 }
 
-.el-date-editor.el-input {
-  width: 100% !important;
+.el-form-item__content .el-date-editor.el-input {
+  width: 100%;
 }
 
 .el-input__wrapper {
-  width: 100% !important;
+  width: 100%;
   box-sizing: border-box;
 }
 
 .el-select {
-  width: 100% !important;
+  width: 100%;
 }

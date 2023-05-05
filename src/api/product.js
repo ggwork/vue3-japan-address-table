@@ -18,10 +18,16 @@ export function updateProductApi (data) {
 // 获取列表
 
 export function getProductApi (data) {
-  console.log('getProduct data:', data)
+
   return http.get('/getProduct', { params: data })
 }
 
 export function deleteProductApi (data) {
   return http.post('/deleteProduct', { data: data })
+}
+
+// 获取购买人信息
+
+export function getCustomerList () {
+  return http.get('//spoi.moyutime.cn/getExpressAddressClient?areaName=&areaNum=10', {}, { headers: { loginU: 'admin', Authorization: '' } })
 }

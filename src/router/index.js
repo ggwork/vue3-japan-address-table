@@ -22,13 +22,13 @@ const routes = [
   //   },
   //   name: 'Index'
   // },
-  {
-    path: '/form',
-    component: () => {
-      return import("../pages/form.vue")
-    },
-    name: 'Form'
-  },
+  // {
+  //   path: '/form',
+  //   component: () => {
+  //     return import("../pages/form.vue")
+  //   },
+  //   name: 'Form'
+  // },
   {
     path: '/list',
     component: () => {

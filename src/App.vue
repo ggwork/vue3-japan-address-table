@@ -16,7 +16,7 @@ import mHeader from './components/mHeader.vue';
 import { ElConfigProvider } from 'element-plus'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 
-
+let locale = zhCn
 
 </script>
 
