@@ -51,7 +51,6 @@ class PureHttp {
   httpInterceptorsRequest () {
     PureHttp.axiosInstance.interceptors.request.use(
       async (config) => {
-        console.log('config:', config)
         // 开启进度条动画
         NProgress.start();
         // 优先判断post/get等方法是否传入回掉，否则执行初始化设置等回掉

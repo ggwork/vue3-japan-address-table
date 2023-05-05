@@ -46,6 +46,7 @@
             </span>
           </template>
         </el-table-column>
+        <el-table-column prop="address" label="地区" />
         <el-table-column label="操作" width="150">
           <template #default="scope">
             <el-button size="small" @click="editRow(scope.$index, scope.row)"
@@ -78,12 +79,12 @@
         v-model:file-list="uploadExcelList"
         :on-exceed="uploadFileExceed"
         :auto-upload="false"
-        :on-change="importExcel" 
+        :on-change="uploadExcel" 
         >
         <template #trigger>
           <el-button type="primary" v-loading="upLoading">上传</el-button>
         </template>
-        <el-button class="ml10" type="success" @click="submitUpload">
+        <el-button class="ml10" type="success" @click="submitUploadExcel" :disabled="!canSyncToDb">
           同步到数据库
         </el-button>
       </el-upload>
@@ -133,10 +134,10 @@
         </el-select>
       </el-form-item>
       <el-form-item label="购买数量" prop="num">
-        <el-input v-model="newProForm.num" :parser="value => Number(value)"/>
+        <el-input v-model="newProForm.num" :parser="value => Number(value)" @change="changeTotalPrice"/>
       </el-form-item>
       <el-form-item label="购买单价" prop="price">
-        <el-input v-model="newProForm.price" :parser="value => Number(value)"/>
+        <el-input v-model="newProForm.price" :parser="value => Number(value)" @change="changeTotalPrice"/>
       </el-form-item>
       <el-form-item label="总价">
         {{ newProForm.num * newProForm.price ?  newProForm.num * newProForm.price : 0}}
@@ -153,10 +154,10 @@
 <script setup>
 
 import  { ref,onMounted } from 'vue'
-import { ElMessage,genFileId } from 'element-plus'
+import { ElMessage,ElMessageBox,genFileId } from 'element-plus'
 import ExcelJS from 'exceljs'
 import dayjs from 'dayjs'
-import { addProduct,getProductApi } from '@/api/product'
+import { addProductApi,getProductApi,updateProductApi,deleteProductApi , batchAddProductApi} from '@/api/product'
 
 let localFormDefaultDate = localStorage.getItem('localFormDefaultDate') 
 
@@ -182,6 +183,8 @@ let addressOptions = [
     label: '三重'
   }
 ]
+
+let canSyncToDb = ref(false)
 // 查询数据库数据
 function searchData(){
   console.log(searchDate.value)
@@ -215,13 +218,6 @@ function checkRowSelectStatus(row){
 }
 
 let tableData = ref([
-  {
-    date:'2023-04-26',
-    productName:'GIアリズﾑコットンブレンﾄﾞセット',
-    num:2,
-    price:790,
-    totalPrice:790
-  }
 ])
 
 let uploadExcelList = ref([])
@@ -262,7 +258,8 @@ let newProForm = ref({
 let newPFormRules = {
   date: [{ required: true, message: '日期不能为空', trigger: 'blur' }],
   productName: [
-    { required: true, message: '商品名不能为空', trigger: 'blur' }
+    { required: true, message: '商品名不能为空', trigger: 'blur'},
+    { min:1,max:100,message:'商品名不能超过100个字符'}
   ],
   address: [
     { required: true, message: '地区不能为空', trigger: 'blur' }
@@ -299,6 +296,10 @@ function resetNewProForm(){
   }
 }
 
+function changeTotalPrice(){
+  newProForm.value.totalPrice = Number(newProForm.value.num) * Number(newProForm.value.price)
+}
+
 function goForm() {
   editType.value = 'new'
   newDialogVisible.value = true
@@ -312,27 +313,32 @@ async function getProductList(){
     endDate:searchDate.value[1],
     searchAddress:searchAddress.value
   })
-  console.log('getProductList res:',res)
   if(res){
     tableData.value = res
   }
 }
 
+
+
+
 function submitProForm(formEl){
   if (!formEl) return
   formEl.validate(async (valid) => {
     if (valid) {
-      console.log('form')
-      localStorage.setItem('localFormDefaultDate',newProForm.value.date)
-      newDialogVisible.value = false
-      await addProduct(newProForm.value)
-      ElMessage.success('新增成功')
-
-      getProductList()
-
       
+      localStorage.setItem('localFormDefaultDate',newProForm.value.date)
+      
+      let editTypeMsg = editType.value === 'new' ? '新增':'更新'
+      if(editType.value === 'new'){
+        await addProductApi(newProForm.value)
+      }else {
+        let res = await updateProductApi(newProForm.value)
+        console.log('res:',res)
+      }
+      ElMessage.success(editTypeMsg+'成功')
+      getProductList()
       resetProForm()
-
+      newDialogVisible.value = false
     } else {
       
       return false
@@ -358,11 +364,20 @@ function startImportExcel(){
   uploadFileRef.value?.clearFiles()
   uploadFileDialogVisible.value = true
   hasUploadToServer.value = true
+  canSyncToDb.value = false
 }
 // 同步上传的小票数据到数据库
-function submitUpload(){
-  uploadFileDialogVisible.value = false
-  hasUploadToServer.value = false
+async function submitUploadExcel(){
+  if(tableData.value){
+    uploadFileDialogVisible.value = false
+    hasUploadToServer.value = false
+    await batchAddProductApi({list:tableData.value})
+    ElMessage.success('数据导入成功')
+    getProductList()
+  }else{
+    ElMessage.error('数据为空')
+  }
+  
 }
 // 询问是否关闭弹窗
 function uploadFileDialogClose(done){
@@ -413,6 +428,8 @@ async function excelToJson(fileBuffer){
   await workbook.xlsx.load(fileBuffer);
   // 取第一个数据的第一行进行数据验证，验证通过了再转json。
   let firstSheet = workbook.worksheets[0]
+
+  console.log('firstSheet:',firstSheet)
   
   // 获取第一个单元格数据
   let firstCellValue = getCellValue(firstSheet.getCell('A1')) ;
@@ -422,9 +439,10 @@ async function excelToJson(fileBuffer){
   }
   
   workbook.eachSheet((worksheet,sheetId)=>{
+    
     let sheetResult = []
     // 默认excel内容里是没有标题的，标题是固定的以下几个
-    let keys=['date','productName','num','price','totalPrice'];
+    let keys=['date','productName','num','price','totalPrice','address','status'];
     worksheet.eachRow((row)=> {
       let obj={};
       // cell.type单元格类型：6-公式 ;2-数值；3-字符串
@@ -445,8 +463,16 @@ async function excelToJson(fileBuffer){
       //   sheetResult.push(obj)
       // }
       row.eachCell((cell, colNumber)=>{
-        obj[keys[colNumber-1]] = getCellValue(cell)
+        let oKey = keys[colNumber-1]
+        
+        obj[oKey] = getCellValue(cell)
       });
+      obj['address'] = worksheet.name
+      obj['status'] = 0
+      // 如果总价不存在，则总价计算总价
+      if(!obj['totalPrice']){
+        obj['totalPrice'] = Number(obj['num']) * Number(obj['price'])
+      }
       sheetResult.push(obj)
     });
     excelResult[sheetId] = sheetResult
@@ -458,7 +484,7 @@ async function excelToJson(fileBuffer){
 } 
 // 将不同的sheet数据合并到一个数据中处理
 function mergeJsonToArray(jsonData) {
-  console.log('jsonData:',jsonData)
+  
   let excelListResult = []
   let keys = Object.keys(jsonData)
   keys.forEach(key=>{
@@ -468,7 +494,7 @@ function mergeJsonToArray(jsonData) {
 }
 
 // 导入excel
-function importExcel(uploadFile,uploadFiles){
+function uploadExcel(uploadFile,uploadFiles){
   upLoading.value = true
   this.uploadRawFile = uploadFile.raw
   
@@ -479,6 +505,11 @@ function importExcel(uploadFile,uploadFiles){
       let excelArrayResult = mergeJsonToArray(excelResult)
       
       tableData.value = excelArrayResult
+      // 将数据同步到数据库
+
+      canSyncToDb.value = true
+      
+      
     }else {
       console.log('excelToJson excelResult:',excelResult)
     }
@@ -504,17 +535,34 @@ function filterStatus(value,row,column){
   const property = column['property']
   return row[property] === value
 }
-
-function editRow(index,row){
+async function editRow(index,row){
   console.log('row:',row)
   editType.value = 'edit'
   newDialogVisible.value = true
   newProForm.value = row
-  
+
 }
 
 function deleteRow(index,row){
-
+  ElMessageBox.confirm('确定要删除该商品信息吗？','提示',{
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }).then(async ()=>{
+      await deleteProductApi({_id:row._id})
+      ElMessage({
+        type: 'success',
+        message: '删除成功',
+      })
+      getProductList()
+    }).catch((error) => {
+      // ElMessage({
+      //   type: 'info',
+      //   message: '删除失败',
+      // })
+      console.error(error)
+    })
+  
 }
 
 
