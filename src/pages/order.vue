@@ -2,8 +2,8 @@
   <div class="main">
     <div class="tools">
       <div class="t-left">
-        <el-button type="primary" @click="goForm">新增数据</el-button>
-        <el-button  @click="createPersonExcel">下载数据</el-button>
+        <!-- <el-button type="primary" @click="goForm">新增数据</el-button> -->
+        <el-button type="primary"  @click="downloadExcel">下载数据</el-button>
       </div>
       <div class="t-right">
         <el-date-picker
@@ -19,11 +19,12 @@
         <el-table-column prop="customerId" label="顧客ID"  />
         <el-table-column prop="customerName" label="顧客名"/>
         <el-table-column prop="sendDate" label="発送日" />
+        
         <el-table-column prop="proList" label="商品名（数量）（价格）" width="360" show-overflow-tooltip>
           <template #default="scope">
             <div v-for="(pro,index) in scope.row.proList" :key="index" class="pro-list">
-              <div class="pro-name" :tip="pro.name">
-                {{ pro.name }}
+              <div class="pro-name" :tip="pro.productName">
+                {{ pro.productName }}
               </div>
               <div class="pro-num">
                 {{ pro.num }}
@@ -35,14 +36,22 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="totalMoneyChina" label="合計（元）" />
-        <el-table-column prop="rate" label="為替レート" />
-        <el-table-column prop="totalMoneyJapan" label="合計（円）" />
-        <el-table-column prop="getDate" label="代金受領日" />
+        <el-table-column prop="totalMoneyChina" label="合計（元）" width="100"/>
+        <el-table-column prop="rate" label="為替レート" width="100">
+          <template #default="scope">
+            {{ scope.row.rate ? scope.row.rate : '' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="totalMoneyJapan" label="合計（円）" width="100">
+          <template #default="scope">
+            {{ scope.row.totalMoneyJapan ? scope.row.totalMoneyJapan : '' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="getDate" label="代金受領日" width="130"/>
         <el-table-column label="状态"
           :filters="[
-            { text: '未使用', value: '0' },
-            { text: '已使用', value: '1' },
+            { text: '未下载', value: 0 },
+            { text: '已下载', value: 1 },
           ]"
           :filter-method="filterStatus"
           >
@@ -64,12 +73,12 @@
   </div>
 </template>
 <script setup>
-import  {ref} from 'vue'
+import  {ref,onMounted} from 'vue'
 import { ElMessage } from 'element-plus'
 import { saveAs } from "file-saver";
 
 import ExcelJS from 'exceljs'
-import { addOrderApi,getOrderApi,deleteOrderApi} from '@/api/order'
+import { addOrderApi,getOrderApi,deleteOrderApi,batchUpdateOrderStatusApi} from '@/api/order'
 
 
 let statusMap = {
@@ -149,8 +158,9 @@ function formatterDate(row){
 
 function getProductData(orderRowData){
 
+
   let proList  = [
-    ['番号','商品名','','','','','','数量','単価（元）','小計（元）','備考'],
+    ['番号','商品名','','','','','','数量','単価（元）','小計（元）','備考']
     // ['1','ヒューラック400','','','','','','1','75','75',''],
     // ['2','パブロンゴールド”','','','','','','1','45','45',''],
     // ['3','パブロンキッズカゼ','','','','','','1','65','65',''],
@@ -180,18 +190,32 @@ function getProductData(orderRowData){
   return proList
 }
 
-function filterStatus(value,row,column){
-  const property = column['property']
-  return row[property] === value
+function filterStatus (value, row, column) {
+  // const property = column["property"];
+  // console.log('filterStatus value:',value,row,column)
+  // console.log('property value:',property)
+  return row['status'] === value;
 }
 
-function downloadExcel(){
+async function downloadExcel(){
   if(tableSelectionData.value){
     let orderList = tableSelectionData.value
     // 循环下载所有订单
     orderList.forEach(orderRowData=>{
       createPersonExcel(orderRowData)
     })
+    tableSelectionData.value.forEach(item => {
+      item.status = 1
+    });
+    let upOrderList = tableSelectionData.value.map(item=>{
+      return{
+        _id:item._id,
+        status:1
+
+      }
+    })
+    await batchUpdateOrderStatusApi({list:upOrderList})
+    ElMessage.success('已开启下载，请稍等片刻')
   }else{
     ElMessage.error('请选择对应的订单')
   }
@@ -218,10 +242,13 @@ function deleteOrder(row){
     })
 }
 
-function getOrderList(){
-  let res = await getProductApi()
+async function getOrderList(){
+  let res = await getOrderApi()
+  console.log('getOrderList res:',res);
   if(res){
     tableData.value = res.list
+  }else {
+    ElMessage.warning('获取订单为空')
   }
 }
 
@@ -340,6 +367,11 @@ function createPersonExcel(orderRowData){
       saveAs(new Blob([buffer]), `订单_${Date.now()}_.xlsx`);
   });
 }
+
+
+onMounted(()=>{
+  getOrderList()
+})
 
 
 

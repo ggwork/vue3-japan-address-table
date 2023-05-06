@@ -14,6 +14,10 @@ export function updateProductApi (data) {
   return http.post('/updateProduct', { data: data })
 }
 
+export function batchUpdateProductStatusApi (data) {
+  // console.log('updateBatchProductApi data:', data)
+  return http.post('/batchUpdateProductStatus', { data: data })
+}
 
 // 获取列表
 

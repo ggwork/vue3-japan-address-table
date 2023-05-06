@@ -30,11 +30,11 @@ const routes = [
   //   name: 'Form'
   // },
   {
-    path: '/list',
+    path: '/order',
     component: () => {
-      return import("../pages/list.vue")
+      return import("../pages/order.vue")
     },
-    name: 'List'
+    name: 'Order'
   },
 ]
 

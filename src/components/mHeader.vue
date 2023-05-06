@@ -9,7 +9,7 @@
       active-text-color="#ffd04b"
     >
       <el-menu-item index="product">小票页</el-menu-item>
-      <el-menu-item index="list">订单页</el-menu-item>
+      <el-menu-item index="order">订单页</el-menu-item>
       <!-- <el-menu-item index="/">下载页</el-menu-item> -->
       <!-- <el-menu-item index="form">表单页</el-menu-item> -->
     </el-menu>

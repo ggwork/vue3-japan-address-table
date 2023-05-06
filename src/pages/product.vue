@@ -17,7 +17,7 @@
       </div>
     </div>
     <div class="table-wrap">
-      <el-table :data="tableData" style="width: 100%" border highlight-current-row
+      <el-table :data="tableData" style="width: 100%" border  ref="productTableRef" highlight-current-row
         @selection-change="tableSelectionChange">
         <el-table-column type="selection" width="55" @selectable="checkRowSelectStatus" />
         <el-table-column prop="date" label="日期" />
@@ -26,8 +26,8 @@
         <el-table-column prop="price" label="单价" />
         <el-table-column prop="totalPrice" label="总价" />
         <el-table-column label="状态" :filters="[
-            { text: '未使用', value: '0' },
-            { text: '已使用', value: '1' },
+            { text: '未使用', value: 0 },
+            { text: '已使用', value: 1 },
           ]" :filter-method="filterStatus">
           <template #default="scope">
             <span :class="[scope.row.status ? 'red' : 'green']">
@@ -113,6 +113,53 @@
       </el-form>
     </el-dialog>
     <el-dialog v-model="orderDialogVisible" title="创建订单" :close-on-click-modal="false">
+      <el-form ref="orderFormRef" :model="orderForm" label-width="120px" class="pro-form" :rules="orderFormRules">
+        <el-form-item label="顧客ID" prop="customerId">
+          <el-input v-model="orderForm.customerId" placeholder="请输入顧客ID" />
+        </el-form-item>
+        <el-form-item label="顧客名" prop="customerName">
+          <el-input v-model="orderForm.customerName" placeholder="请输入顧客名" />
+        </el-form-item>
+        <el-form-item label="顧客手机" prop="customerPhone">
+          <el-input v-model.number="orderForm.customerPhone" placeholder="请输入顧客手机号" />
+        </el-form-item>
+        <el-form-item label="郵送先" prop="getAddress">
+          <el-input type="textarea" :rows="2" v-model.trim="orderForm.getAddress" placeholder="请输入郵送先" />
+        </el-form-item>
+        <el-form-item label="代金受領日" prop="getDate">
+          <el-date-picker v-model="orderForm.getDate" type="date" placeholder="请选择日期" 
+            value-format="YYYY-MM-DD" format="YYYY-MM-DD" />
+        </el-form-item>
+        
+        <el-form-item label="商品列表" prop="proList">
+          <el-tag
+            v-for="tag in orderForm.proList"
+            :key="tag.productName"
+            class="mb10 mr10"
+            type="success"
+          >
+            {{ tag.productName + '【' + tag.address +'】'}}
+          </el-tag>
+        </el-form-item>
+        <el-form-item label="発送日" prop="sendDate">
+          <el-date-picker v-model="orderForm.sendDate" type="date" placeholder="请选择日期" 
+            value-format="YYYY-MM-DD" format="YYYY-MM-DD" />
+        </el-form-item>
+        <el-form-item label="合計金額（元）" prop="totalMoneyChina">
+          <el-input v-model="orderForm.totalMoneyChina" placeholder="请输入合计金额"  @change="changeOrderTotalMoney" />
+        </el-form-item>
+        <el-form-item label="為替レート）" prop="rate">
+          <el-input v-model="orderForm.rate" placeholder="请输入為替レート" @change="changeRate"/>
+        </el-form-item>
+        <el-form-item label="合計金額（円）" prop="totalMoneyJapan">
+          <el-input v-model="orderForm.totalMoneyJapan" placeholder="请输入合计金额"/>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="submitOrderForm(orderFormRef)">提交</el-button>
+          <el-button @click="cancelOrderForm(orderFormRef)">取消</el-button>
+          <el-button @click="changeCustomer">切换用户</el-button>
+        </el-form-item>
+      </el-form>
     </el-dialog>
   </div>
 </template>
@@ -128,6 +175,7 @@ import {
   deleteProductApi,
   batchAddProductApi,
   getCustomerList,
+  batchUpdateProductStatusApi
 } from "@/api/product";
 
 import { addOrderApi } from "@/api/order";
@@ -157,11 +205,11 @@ let addressOptions = [
   },
 ];
 
+let productTableRef = ref()
+
 let canSyncToDb = ref(false);
 // 查询数据库数据
 async function searchData () {
-  console.log(searchDate.value);
-  console.log(searchAddress.value);
   let queryObj = { cPage: currentPage.value, pageSize: pageSize.value };
   if (searchDate.value) {
     queryObj.startDate = searchDate.value[0];
@@ -241,10 +289,10 @@ function pageCurrentChange (num) {
 // 新增小票表单
 
 function validateNumber (rulr, value, callback) {
-  if (/^\d+(\.\d+)?$/.test(value)) {
+  if (/^\d+(\.\d+)?$/.test(value) || value === '') {
     callback();
   } else {
-    callback(new Error("输入必须是数字"));
+    callback(new Error("必须是数字"));
   }
 }
 let newProForm = ref({
@@ -267,14 +315,14 @@ let newPFormRules = {
   ],
   num: [
     { required: true, message: "数量不能为空" },
-    { validator: validateNumber, trigger: "blur" },
+    { validator: validateNumber, trigger: "change" },
   ],
   price: [
     { required: true, message: "价格不能为空" },
-    { validator: validateNumber, trigger: "blur" },
+    { validator: validateNumber, trigger: "change" },
   ],
 };
-
+let customerList = ref([])
 // 订单表单
 let orderForm = ref({
   customerId: "",
@@ -300,43 +348,11 @@ let orderFormRules = {
   customerPhone: [
     { required: true, message: "顾客手机号不能为空", trigger: "blur" },
   ],
-  sendDate: [
+  getAddress: [
     {
-      type: "date",
-      required: false,
-      message: "发送日的格式不正确",
-      trigger: "blur",
-    },
-  ],
-  proList: [
-    {
-      type: "array",
+      type: "string",
       required: true,
-      message: "产品列表参数必须是数组",
-      trigger: "change",
-    },
-  ],
-  totalMoneyChina: [
-    {
-      type: "number",
-      required: false,
-      message: "合计金额（元）必须是数字",
-      trigger: "blur",
-    },
-  ],
-  rate: [
-    {
-      type: "number",
-      required: false,
-      message: "汇率必须是数字",
-      trigger: "blur",
-    },
-  ],
-  totalMoneyJapan: [
-    {
-      type: "number",
-      required: false,
-      message: "合计金额（円）必须是数字",
+      message: "郵送先不能为空",
       trigger: "blur",
     },
   ],
@@ -348,14 +364,35 @@ let orderFormRules = {
       trigger: "blur",
     },
   ],
-  getAddress: [
+  sendDate: [
     {
-      type: "string",
-      required: true,
-      message: "郵送先不能为空",
+      type: "date",
+      required: false,
+      message: "发送日的格式不正确",
       trigger: "blur",
     },
   ],
+  // proList: [
+  //   {
+  //     type: "array",
+  //     required: true,
+  //     message: "产品列表参数必须是数组",
+  //     trigger: "change",
+  //   },
+  // ],
+  totalMoneyChina: [
+    { validator: validateNumber, trigger: "change" },
+  ],
+  rate: [
+    { required: false, message: "数量不能为空" },
+    { validator: validateNumber, trigger: "change" },
+  ],
+  totalMoneyJapan: [
+    { required: false, message: "数量不能为空" },
+    { validator: validateNumber, trigger: "change" },
+  ],
+  
+  
   status: [
     {
       type: "number",
@@ -370,6 +407,7 @@ let orderFormRules = {
 // let defaultDate = localFormDefaultDate && localFormDefaultDate!=='undefined' ? new Date(localFormDefaultDate) : new Date()
 
 let proFormRef = ref();
+let orderFormRef = ref();
 
 function resetNewProForm () {
   newProForm.value = {
@@ -434,6 +472,68 @@ function resetProForm (formEl) {
   if (!formEl) return;
   formEl.clearValidate();
   formEl.resetFields();
+}
+
+function changeOrderTotalMoney(value){
+  console.log('changeOrderTotalMoney value:',value)
+  ElMessageBox.confirm('修改合计金额可能会导致实际商品总价与修改不一致，请谨慎操作', '提示', {
+    // if you want to disable its autofocus
+    // autofocus: false,
+    confirmButtonText: '确定修改',
+    cancelButtonText: '取消修改',
+    type: 'warning',
+  }).then(()=>{
+    orderForm.value.totalMoneyJapan = Number(orderForm.value.rate) * Number(orderForm.value.totalMoneyChina)
+  }).catch(()=>{
+    let totalMoneyChina = 0
+    orderForm.value.proList.forEach(item=>{
+      totalMoneyChina += Number(item.num) * Number(item.price)
+    })
+    orderForm.value.totalMoneyChina = Number(totalMoneyChina)
+  })
+  
+}
+
+function changeRate(){
+  orderForm.value.totalMoneyJapan = Number(orderForm.value.rate) * Number(orderForm.value.totalMoneyChina)
+}
+
+
+function submitOrderForm(formEl) {
+  if (!formEl) return;
+  formEl.validate(async (valid) => {
+    if (valid) {
+      
+      await addOrderApi(orderForm.value)
+      // 更新商品状态
+      let productStatus = orderForm.value.proList.map(item=>{
+        return {
+          _id:item._id,
+          status:1
+        }
+      })
+      await batchUpdateProductStatusApi({
+        list:productStatus
+      })
+      // 更新状态
+      tableSelectionData.value.forEach(item=>{
+        item.status = 1
+      })
+      
+      orderDialogVisible.value = false
+      ElMessage.success('订单生成成功，请前往订单页查看')
+      if(productTableRef.value){
+        productTableRef.value.clearSelection()
+      }
+    }
+  })
+
+}
+
+function  cancelOrderForm(formEl) {
+  if (!formEl) return;
+  orderDialogVisible.value = false
+  formEl.resetFields()
 }
 
 function tableSelectionChange (sectionData) {
@@ -616,24 +716,65 @@ function uploadFileExceed (files) {
   file.uid = genFileId();
   uploadFileRef.value.handleStart(file);
 }
+// m,n  不包括n
+function randomNum(m,n){
+  return Math.floor(Math.random() * (n-m) + m)
+}
+function changeCustomer(){
+  if(customerList.value){
+    let len = customerList.value.length
+    let customer = customerList.value[1,randomNum(1,len)]
+    setOrderFormCustomer(customer)
+  }else {
+    ElMessage.error('用户列表不存在,请重新选择商品，生成订单')
+  }
+  
+}
 
+function setOrderFormCustomer(customer){
+  if(customer){
+    orderForm.value.customerId = customer.userName
+    orderForm.value.customerName = customer.userName
+    orderForm.value.customerPhone = customer.phone
+    orderForm.value.getAddress =customer.comAddress 
+  }
+ 
+}
 // 生成订单
 async function createOrder () {
-  console.log("生成订单");
 
-  console.log("tableSelectionData.value:", tableSelectionData.value);
   if (tableSelectionData.value) {
+    let tempDate = tableSelectionData.value[0].date
+    let hasDiffDate = tableSelectionData.value.find(item=>{
+      return item.date !== tempDate
+    })
+    if(hasDiffDate){
+      ElMessage.warning('所选商品的日期不一致，请谨慎操作')
+    }
+    
+    // 获取顾客
+    customerList.value = await getCustomerList();
+    setOrderFormCustomer(customerList.value[0])
+    orderForm.value.proList = tableSelectionData.value
+    let totalMoneyChina = 0
+    orderForm.value.proList.forEach(item=>{
+      totalMoneyChina += Number(item.num) * Number(item.price)
+    })
+    orderForm.value.totalMoneyChina = Number(totalMoneyChina)
+    orderForm.value.getDate =  tableSelectionData.value[0].date
+
     orderDialogVisible.value = true;
-    let customerList = await getCustomerList();
-    console.log("customerList:", customerList);
+
   } else {
     ElMessage.error("请选择对应的商品后再生成订单");
   }
 }
 
 function filterStatus (value, row, column) {
-  const property = column["property"];
-  return row[property] === value;
+  // const property = column["property"];
+  // console.log('filterStatus value:',value,row,column)
+  // console.log('property value:',property)
+  return row['status'] === value;
 }
 async function editRow (index, row) {
   console.log("row:", row);
@@ -727,6 +868,6 @@ onMounted(() => {
 }
 
 .pro-form {
-  width: 400px;
+  width: 500px;
 }
 </style>
